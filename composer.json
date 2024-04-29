@@ -1,0 +1,22 @@
+{
+    "name": "zoghal/irnic-api",
+    "description": "IRNIC api wrapper for resellers",
+    "type": "library",
+    "require": {
+        "guzzlehttp/guzzle": "^7.8"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Zoghal\\IrnicApi\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Saleh Souzanchi",
+            "email": "saleh.souzanchi@gmail.com",
+            "homepage": "https://github.com/zoghal"
+        }
+    ],
+    "minimum-stability": "stable"
+}
