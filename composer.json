@@ -2,8 +2,10 @@
     "name": "zoghal/irnic-api",
     "description": "IRNIC api wrapper for resellers",
     "type": "library",
+    "version": "1.0.0",
     "require": {
-        "guzzlehttp/guzzle": "^7.8"
+        "guzzlehttp/guzzle": "^7.8",
+        "jackiedo/xml-array": "^1.1"
     },
     "license": "MIT",
     "autoload": {
