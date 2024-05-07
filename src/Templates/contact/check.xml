@@ -1,0 +1,13 @@
+{% extends layouts/main.xml %}
+{% block content %}
+<check> 
+    <contact:check xmlns:contact="http://epp.nic.ir/ns/contact-1.0"> 
+    {% foreach($contacts as $contact): %}
+        <contact:id>{{ $contact }}</contact:id> 
+    {% endforeach; %}
+        <contact:authInfo> 
+            <contact:pw>{{ $disposit }}</contact:pw> 
+        </contact:authInfo> 
+    </contact:check>
+</check> 
+{% endblock %}
