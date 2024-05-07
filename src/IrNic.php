@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Zoghal\IrnicApi;
 
+use GuzzleHttp\Client;
+use Jackiedo\XmlArray\Xml2Array;
+use Zoghal\IrnicApi\Templates\Template;
 
-class Reseller
+class IrNic
 {
     private static $ERROR_CODES = [
         1000 => [
@@ -98,10 +101,24 @@ class Reseller
         ]
     ];
 
-    public function __construct()
-    {
-    }
+    public static $irnicApiUrl = 'https://epp.nic.ir/submit';
+    public static $resselerUniqueId = 'abs-ssss';
+    public static $template_cache = false;
+    protected static $irnicToken;
+    protected static $irnicDeposit;
 
+    /**
+     * Sets the IRNIC token and deposit for the reseller.
+     *
+     * @param string $token The IRNIC token to set.
+     * @param string $deposit The deposit value to set.
+     */
+    public static function reseller(string $token, string $deposit)
+    {
+        self::$irnicToken = $token;
+        self::$irnicDeposit = $deposit;
+        Template::$cache_enabled = self::$template_cache;
+    }
 
     /**
      * Retrieves the error message corresponding to the given error code.
@@ -112,5 +129,74 @@ class Reseller
     public static function getError(int $errCode): string
     {
         return self::$ERROR_CODES[$errCode]['en'];
+    }
+
+    /**
+     * Call the IRNIC API with the provided XML and return the response as an array.
+     *
+     * @param mixed $xml The XML data to send to the API.
+     * @return array The response from the IRNIC API as an array.
+     */
+    public static function callApi($xml)
+    {
+        $client = new Client();
+        $response = $client->post(
+            self::$irnicApiUrl,
+            [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . self::$irnicToken,
+                    'Content-Type' => 'text/xml; charset=UTF8',
+                ],
+                'body' => $xml
+            ]
+        );
+        $response = $response->getBody()->getContents();
+        $response = Xml2Array::convert($response)->toArray();
+        return $response;
+    }
+
+
+    /**
+     * Checks the content of the given contacts and returns the result.
+     *
+     * @param array $contacts The contacts to be checked.
+     * @throws \Exception If no contacts are provided.
+     * @return array An array containing the XML response and the result of the content check.
+     */
+    public static function contentCheck(array $contacts)
+    {
+        if (empty($contacts)) {
+            throw new \Exception('No contacts provided');
+        }
+        $data = [
+            'contacts' => $contacts,
+            'disposit' => self::$irnicDeposit,
+            'UniqueId' => self::$resselerUniqueId
+        ];
+
+        $xml = Template::view('contact/check.xml', $data);
+        $xml = self::callApi($xml);
+        $xml = $xml["epp"]["response"];
+        $out = [
+            'code' => $xml['result']['@attributes']['code'],
+            'clTRID' => $xml['trID']['clTRID'],
+            'svTRID' => $xml['trID']['svTRID'],
+            'massage' => $xml['result']['msg'],
+            'result' => []
+        ];
+        $xml = $xml['resData']['contact:chkData']['contact:cd'];
+        foreach ($xml as $key => $value) {
+            $contact = $value['contact:id']['@value'];
+            if (!isset($value['contact:position'])) {
+                $out['result'][$contact] = 0;
+            } else {
+                $pos = [];
+                foreach ($value['contact:position'] as $position) {
+                    $pos[$position['@attributes']['type']] = $position['@attributes']['allowed'];
+                }
+                $out['result'][$contact] = $pos;
+            }
+        }
+        return $out;
     }
 }
