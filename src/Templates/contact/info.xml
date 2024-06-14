@@ -1,0 +1,11 @@
+{% extends layouts/main.xml %}
+{% block content %}
+<check> 
+    <contact:info xmlns:contact="http://epp.nic.ir/ns/contact-1.0"> 
+        <contact:id>{{ $irnic_handle }}</contact:id> 
+        <contact:authInfo> 
+            <contact:pw>{{ $disposit }}</contact:pw> 
+        </contact:authInfo> 
+    </contact:info>
+</check> 
+{% endblock %}
