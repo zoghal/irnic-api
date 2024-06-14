@@ -296,7 +296,7 @@ class IrNic
 
         $out['data']['id'] = $response['epp.response.resData.contact:infData.contact:id'];
         $out['data']['roid'] = $response['epp.response.resData.contact:infData.contact:roid'];
-        
+
         foreach ($response['epp.response.resData.contact:infData.contact:status'] as $key => $value) {
             $out['data']['status'][] = $value['@attributes.s'];
         }
@@ -312,7 +312,7 @@ class IrNic
             'email' => Arrays::get('epp.response.resData.contact:infData.contact:email', $response),
             'crDate' => Arrays::get('epp.response.resData.contact:infData.contact:crDate', $response)
         ];
-        
+
         $out['data']['contact']['postalInfo'] = [
             'firstname' => Arrays::get('epp.response.resData.contact:infData.contact:postalInfo.contact:firstname', $response),
             'lastname' => Arrays::get('epp.response.resData.contact:infData.contact:postalInfo.contact:lastname', $response),
@@ -331,8 +331,63 @@ class IrNic
                 'balance' =>  $response['epp.response.extension.contractInfo.balance'],
                 'number' => $response['epp.response.extension.contractInfo.@attributes.number'],
             ];
-        }  
-        
+        }
+
+        return $out;
+    }
+
+
+
+    public function contactUpdate(string $nic_handle, array $data)
+    {
+        //TODO: بعد از ثبت یه دامنه تکمیل گردد.
+    }
+
+
+
+    /**
+     * Checks the availability of the given domains and returns the result.
+     *
+     * @param array $domains An array of domain names to be checked.
+     * @return array An array containing the meta information and the availability status of each domain.
+     * The array structure is as follows:
+     * [
+     *     'meta' => [
+     *         'code' => The response code,
+     *         'massage' => The response message,
+     *         'clTRID' => The client transaction ID,
+     *         'svTRID' => The server transaction ID,
+     *     ],
+     *     'data' => [
+     *         'domain_name' => [
+     *             'normalized_name' => The normalized domain name,
+     *             'canonized_name' => The canonized domain name,
+     *             'tld' => The top-level domain (TLD),
+     *             'available' => A boolean indicating whether the domain is available or not,
+     *         ],
+     *         ...
+     *     ],
+     * ]
+     */
+    public function domainCheck(array $domains)
+    {
+        $response = $this->callApi('domain/check', ['domains' => $domains]);
+
+        $out['meta'] = [
+            'code' => $response['epp.response.result.@attributes.code'],
+            'massage' => $response['epp.response.result.msg'],
+            'clTRID' => $response['epp.response.trID.clTRID'],
+            'svTRID' => $response['epp.response.trID.svTRID'],
+        ];
+
+        foreach ($response['epp.response.resData.domain:chkData.domain:cd'] as $domain) {
+            $out['data'][$domain['domain:name.@value']] = [
+                'normalized_name' => $domain['domain:name.@attributes.normalized_name'],
+                'canonized_name' => $domain['domain:name.@attributes.canonized_name'],
+                'tld' => $domain['domain:name.@attributes.tld'],
+                'available' => (bool)$domain['domain:name.@attributes.avail'],
+            ];
+        }
         return $out;
     }
 }

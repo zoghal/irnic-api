@@ -1,0 +1,13 @@
+{% extends layouts/main.xml %}
+{% block content %}
+	<check>
+		<domain:check xmlns:domain="http://epp.nic.ir/ns/domain-1.0">
+			{% foreach($domains as $domain): %}
+			<domain:name>{{ $domain }}</domain:name>
+			{% endforeach; %}
+			<domain:authInfo>
+				<domain:pw>{{ $disposit }}</domain:pw>
+			</domain:authInfo>
+		</domain:check>
+	</check>
+{% endblock %}
