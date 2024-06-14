@@ -101,24 +101,67 @@ class IrNic
         ]
     ];
 
+    protected $config = [];
     public static $irnicApiUrl = 'https://epp.nic.ir/submit';
-    public static $resselerUniqueId = 'abs-ssss';
-    public static $template_cache = false;
-    protected static $irnicToken;
-    protected static $irnicDeposit;
+    public static $templateCache = false;
+    public static $debug = false;
+    /**
+     * Constructs a new instance of the class.
+     *
+     * @param string $irnic_token The IRNIC token.
+     * @param string $irnic_password The IRNIC password.
+     * @param string $reseller_nic_handle The reseller NIC handle. Default is an empty string.
+     * @throws \Exception If the reseller NIC handle does not end with '-irnic'.
+     * @return void
+     */
+    private function __construct($irnic_token, $irnic_password, $reseller_nic_handle = '')
+    {
+        if (false === strpos($reseller_nic_handle, '-irnic')) {
+            throw new \Exception('resseler_nic_handle must end with -irnic');
+        }
+        $reseller_nic_handle = str_replace('-irnic', '', $reseller_nic_handle);
+        $this->config = [
+            'token' => $irnic_token,
+            'password' => $irnic_password,
+            'handle' => $reseller_nic_handle
+        ];
+    }
 
     /**
-     * Sets the IRNIC token and deposit for the reseller.
+     * Creates a new instance of the class with the given reseller credentials.
      *
-     * @param string $token The IRNIC token to set.
-     * @param string $deposit The deposit value to set.
+     * @param string $token The IRNIC token.
+     * @param string $deposit The IRNIC deposit.
+     * @param mixed $reseller_nic_handle The reseller NIC handle.
+     * @return static The newly created instance of the class.
      */
-    public static function reseller(string $token, string $deposit)
+    public static function reseller(string $token, string $deposit, $reseller_nic_handle)
     {
-        self::$irnicToken = $token;
-        self::$irnicDeposit = $deposit;
-        Template::$cache_enabled = self::$template_cache;
+        return new static($token, $deposit, $reseller_nic_handle);
     }
+
+
+    /**
+     * Retrieves the value at the specified path in the given nested array.
+     *
+     * @param array &$data The nested array to search in.
+     * @param string $path The path to the desired value, using dot notation.
+     * @param mixed $def The default value to return if the path is not found. Default is null.
+     * @return mixed The value at the specified path, or the default value if the path is not found.
+     */
+    protected function getValue(array &$data, $path, $def = null)
+    {
+        $keys = explode('.', $path);
+        foreach ($keys as $k) {
+            if (isset($data[$k])) {
+                $data = &$data[$k];
+            } else {
+                return $def;
+            }
+        }
+        return $data;
+    }
+
 
     /**
      * Retrieves the error message corresponding to the given error code.
@@ -137,66 +180,159 @@ class IrNic
      * @param mixed $xml The XML data to send to the API.
      * @return array The response from the IRNIC API as an array.
      */
-    public static function callApi($xml)
+    private function callApi($action, $data)
     {
+        $xml = $this->renderTemplate($action . '.xml', $data);
         $client = new Client();
         $response = $client->post(
             self::$irnicApiUrl,
             [
                 'headers' => [
-                    'Authorization' => 'Bearer ' . self::$irnicToken,
+                    'Authorization' => 'Bearer ' . $this->config['token'],
                     'Content-Type' => 'text/xml; charset=UTF8',
                 ],
                 'body' => $xml
             ]
         );
-        $response = $response->getBody()->getContents();
-        $response = Xml2Array::convert($response)->toArray();
-        return $response;
+        $xml = $response->getBody()->getContents();
+        $array = Xml2Array::convert($xml)->toArray();
+        $flat = Arrays::flatten($array);
+        if (self::$debug) {
+            $debug = print_r(['flat' => $flat, 'xml' => $xml, 'array' => $array], true);
+            $action = str_replace('/', '-', $action);
+            file_put_contents('debug' . $action . '.log', $debug);
+        }
+        return $flat;
     }
 
+    /**
+     * Generates a unique identifier by concatenating the handle from the configuration
+     * with the current time.
+     *
+     * @return string The generated unique identifier.
+     */
+    private function generateUniqueId()
+    {
+        return $this->config['handle'] . '-' . time();
+    }
+
+    /**
+     * Renders a template with the given name and data.
+     *
+     * @param string $templateName The name of the template to render.
+     * @param array $data The data to pass to the template.
+     * @return string The rendered template.
+     */
+    private function renderTemplate($templateName, array $data)
+    {
+        $data = array_merge($data, [
+            'disposit' => $this->config['password'],
+            'UniqueId' => $this->generateUniqueId()
+        ]);
+        return Template::view($templateName, $data);
+    }
 
     /**
      * Checks the content of the given contacts and returns the result.
      *
-     * @param array $contacts The contacts to be checked.
+     * @param array $contacts The nic-handels to be checked.
      * @throws \Exception If no contacts are provided.
      * @return array An array containing the XML response and the result of the content check.
      */
-    public static function contentCheck(array $contacts)
+    public function contentCheck(array $contacts)
     {
         if (empty($contacts)) {
             throw new \Exception('No contacts provided');
         }
-        $data = [
-            'contacts' => $contacts,
-            'disposit' => self::$irnicDeposit,
-            'UniqueId' => self::$resselerUniqueId
+        $response = $this->callApi('contact/check', ['contacts' => $contacts]);
+
+        $out['meta'] = [
+            'code' => $response['epp.response.result.@attributes.code'],
+            'massage' => $response['epp.response.result.msg'],
+            'clTRID' => $response['epp.response.trID.clTRID'],
+            'svTRID' => $response['epp.response.trID.svTRID'],
         ];
 
-        $xml = Template::view('contact/check.xml', $data);
-        $xml = self::callApi($xml);
-        $xml = $xml["epp"]["response"];
-        $out = [
-            'code' => $xml['result']['@attributes']['code'],
-            'clTRID' => $xml['trID']['clTRID'],
-            'svTRID' => $xml['trID']['svTRID'],
-            'massage' => $xml['result']['msg'],
-            'result' => []
-        ];
-        $xml = $xml['resData']['contact:chkData']['contact:cd'];
-        foreach ($xml as $key => $value) {
-            $contact = $value['contact:id']['@value'];
-            if (!isset($value['contact:position'])) {
-                $out['result'][$contact] = 0;
-            } else {
-                $pos = [];
-                foreach ($value['contact:position'] as $position) {
-                    $pos[$position['@attributes']['type']] = $position['@attributes']['allowed'];
-                }
-                $out['result'][$contact] = $pos;
+        $response = $response['epp.response.resData.contact:chkData.contact:cd'];
+
+        foreach ($response as $item) {
+            $contact = $item['contact:id.@value'];
+            if (!isset($item['contact:position'])) {
+                $out['data'][$contact] = false;
+                continue;
             }
+            $pos = [];
+            foreach ($item['contact:position'] as $position) {
+                $pos[$position['@attributes.type']] = (bool) $position['@attributes.allowed'];
+            }
+            $out['data'][$contact] = $pos;
         }
+        return $out;
+    }
+
+
+
+    public function contentInfo(string $nic_handle = null)
+    {
+        if (null === $nic_handle) {
+            throw new \Exception('irnic-handle or emailis not provided');
+        }
+        $response = $this->callApi('contact/info', ['irnic_handle' => $nic_handle]);
+
+
+
+
+        $out['meta'] = [
+            'code' => $response['epp.response.result.@attributes.code'],
+            'massage' => $response['epp.response.result.msg'],
+            'clTRID' => $response['epp.response.trID.clTRID'],
+            'svTRID' => $response['epp.response.trID.svTRID'],
+        ];
+
+        if (!Arrays::has_key('epp.response.resData', $response)) {
+            $out['data'] = [];
+            return $out;
+        }
+
+        $out['data']['id'] = $response['epp.response.resData.contact:infData.contact:id'];
+        $out['data']['roid'] = $response['epp.response.resData.contact:infData.contact:roid'];
+        
+        foreach ($response['epp.response.resData.contact:infData.contact:status'] as $key => $value) {
+            $out['data']['status'][] = $value['@attributes.s'];
+        }
+
+        foreach ($response['epp.response.resData.contact:infData.contact:position'] as $key => $value) {
+            $out['data']['position'][$value['@attributes.type']] = (bool) $value['@attributes.allowed'];
+        }
+
+        $out['data']['contact'] = [
+            'voice' => Arrays::get('epp.response.resData.contact:infData.contact:voice', $response),
+            'fax' => Arrays::get('epp.response.resData.contact:infData.contact:fax', $response),
+            'ident' => Arrays::get('epp.response.resData.contact:infData.contact:ident', $response),
+            'email' => Arrays::get('epp.response.resData.contact:infData.contact:email', $response),
+            'crDate' => Arrays::get('epp.response.resData.contact:infData.contact:crDate', $response)
+        ];
+        
+        $out['data']['contact']['postalInfo'] = [
+            'firstname' => Arrays::get('epp.response.resData.contact:infData.contact:postalInfo.contact:firstname', $response),
+            'lastname' => Arrays::get('epp.response.resData.contact:infData.contact:postalInfo.contact:lastname', $response),
+            'street' => Arrays::get('epp.response.resData.contact:infData.contact:postalInfo.contact:addr.contact:street', $response),
+            'city' => Arrays::get('epp.response.resData.contact:infData.contact:postalInfo.contact:addr.contact:city', $response),
+            'sp' => Arrays::get('epp.response.resData.contact:infData.contact:postalInfo.contact:addr.contact:sp', $response),
+            'pc' => Arrays::get('epp.response.resData.contact:infData.contact:postalInfo.contact:addr.contact:pc', $response),
+            'cc' => Arrays::get('epp.response.resData.contact:infData.contact:postalInfo.contact:addr.contact:cc', $response),
+            'type' => Arrays::get('epp.response.resData.contact:infData.contact:postalInfo.@attributes.type', $response),
+        ];
+
+        if (Arrays::has_key('epp.response.extension', $response)) {
+            $out['extension'] = [
+                'recieved' => $response['epp.response.extension.contractInfo.recieved'],
+                'spent' => $response['epp.response.extension.contractInfo.spent'],
+                'balance' =>  $response['epp.response.extension.contractInfo.balance'],
+                'number' => $response['epp.response.extension.contractInfo.@attributes.number'],
+            ];
+        }  
+        
         return $out;
     }
 }
