@@ -381,11 +381,13 @@ class IrNic
         ];
 
         foreach ($response['epp.response.resData.domain:chkData.domain:cd'] as $domain) {
-            $out['data'][$domain['domain:name.@value']] = [
+            $out['data'][] = [
+                'domain' => $domain['domain:name.@value'],
                 'normalized_name' => $domain['domain:name.@attributes.normalized_name'],
                 'canonized_name' => $domain['domain:name.@attributes.canonized_name'],
                 'tld' => $domain['domain:name.@attributes.tld'],
                 'available' => (bool)$domain['domain:name.@attributes.avail'],
+                'reason' => Arrays::get('domain:reason', $domain),
             ];
         }
         return $out;
