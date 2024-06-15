@@ -1,0 +1,27 @@
+{% extends layouts/main.xml %}
+{% block content %}
+	<create>
+		<domain:create xmlns:domain="http://epp.nic.ir/ns/domain-1.0">
+			<domain:name>{{ $domain }}</domain:name>
+			<domain:period unit="m">{{ $period }}</domain:period>
+			<domain:ns>
+				{% foreach($ns as $nameserver): %}
+				<domain:hostAttr>
+					<domain:hostName>{{ $nameserver['hostName'] }}</domain:hostName>
+					{% if(!empty($nameserver['hostAddr'])): %}
+						<domain:hostAddr ip="{{ $nameserver['type'] }}">{{ $nameserver['hostAddr'] }}</domain:hostAddr>
+					{% endif %}
+				</domain:hostAttr>
+				{% endforeach %}
+			</domain:ns>
+			<domain:contact type="holder">{{ $contacts['holder'] }}</domain:contact>
+			<domain:contact type="admin">{{ $contacts['admin'] }}</domain:contact>
+			<domain:contact type="tech">{{ $contacts['tech'] }}</domain:contact>
+			<domain:contact type="bill">{{ $contacts['bill'] }}</domain:contact>
+			<domain:agreement>true</domain:agreement>
+			<domain:authInfo>
+				<domain:pw>{{ $disposit }}</domain:pw>
+			</domain:authInfo>
+		</domain:create>
+	</create>
+{% endblock %}

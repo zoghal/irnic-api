@@ -174,15 +174,34 @@ class IrNic
         return self::$ERROR_CODES[$errCode]['en'];
     }
 
+
+    protected function getTypeIP($ip)
+    {
+        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+            return false;
+        }
+        if (filter_var($ip, FILTER_FLAG_IPV6)) {
+            return 'v6';
+        } else {
+            return 'v4';
+        }
+    }
+
+
     /**
      * Call the IRNIC API with the provided XML and return the response as an array.
      *
-     * @param mixed $xml The XML data to send to the API.
+     * @param string $action The action to be performed.
+     * @param array $data The data to send to the API.
+     * @param bool $reternXml Whether to return the XML directly. Default is false.
      * @return array The response from the IRNIC API as an array.
      */
-    private function callApi($action, $data)
+    private function callApi(string $action, array $data, $reternXml = false)
     {
         $xml = $this->renderTemplate($action . '.xml', $data);
+        if ($reternXml) {
+            return $xml;
+        }
         $client = new Client();
         $response = $client->post(
             self::$irnicApiUrl,
@@ -394,10 +413,17 @@ class IrNic
     }
 
 
+    /**
+     * Retrieves information about a domain.
+     *
+     * @param string $domain The domain name to retrieve information for.
+     * @throws \Exception If the API call fails.
+     * @return array An array containing the meta information and the domain information.
+     * The array structure is as follows:
+     */
     public function domainInfo(string $domain)
     {
         $response = $this->callApi('domain/info', ['domain' => $domain]);
-        print_r($response);
         $out['meta'] = [
             'code' => $response['epp.response.result.@attributes.code'],
             'massage' => $response['epp.response.result.msg'],
@@ -420,5 +446,61 @@ class IrNic
             $out['data']['ns'][$key]['ip'] = Arrays::get('domain:hostAddr.@attributes.ip', $ns);
         }
         return $out;
+    }
+
+    /**
+     * Creates a new domain with the given parameters.
+     *
+     * @param string $domain The domain name to create.
+     * @param int $period The period of the domain in months. Must be 12 or 60.
+     * @param array $contacts An array of contact details for the domain.
+     * @param array $ns An array of nameservers for the domain.
+     * @throws \Exception If the domain period is not 12 or 60.
+     * @return void
+     */
+    public function domainCreate(string $domain, int $period, array $contacts, array $ns)
+    {
+        $_periods = [12, 60];
+        $_contacts = ['holder', 'admin', 'tech', 'bill'];
+        $_ns = ['ns1', 'ns2', 'ns3', 'ns4'];
+
+        if (!in_array($period, $_periods)) {
+            throw new \Exception('Domain period is must be 12 or 60');
+        }
+
+        foreach ($_contacts as $key => $name) {
+            if (!array_key_exists($name, $contacts)) {
+                throw new \Exception('$contacts[\'' . $name . '\'] is not set');
+            }
+            if (empty($contacts[$name])) {
+                throw new \Exception('$contacts[\'' . $name . '\'] is empty');
+            }
+        }
+
+        $_ns = count($ns);
+        if ($_ns < 2 || $_ns > 4) {
+            throw new \Exception('$ns must be between 2 and 4 nameservers');
+        }
+
+        $data = [
+            'domain' => $domain,
+            'period' => $period,
+            'contacts' => $contacts,
+        ];
+        foreach ($ns as $key => $val) {
+            if (is_numeric($key)) {
+                $key = $val;
+                $val = false;
+            }
+            $data['ns'][] = [
+                'hostName' => $key,
+                'hostAddr' => $val,
+                'type' => $this->getTypeIP($val)
+            ];
+        }
+
+
+        $response = $this->callApi('domain/create', $data, true);
+        print_r($response);
     }
 }
