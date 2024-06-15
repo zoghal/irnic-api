@@ -392,4 +392,33 @@ class IrNic
         }
         return $out;
     }
+
+
+    public function domainInfo(string $domain)
+    {
+        $response = $this->callApi('domain/info', ['domain' => $domain]);
+        print_r($response);
+        $out['meta'] = [
+            'code' => $response['epp.response.result.@attributes.code'],
+            'massage' => $response['epp.response.result.msg'],
+            'clTRID' => $response['epp.response.trID.clTRID'],
+            'svTRID' => $response['epp.response.trID.svTRID'],
+        ];
+        $out['data']['domain'] = $response['epp.response.resData.domain:infData.domain:name'];
+        $out['data']['roid'] =  Arrays::get('epp.response.resData.domain:infData.domain:roid', $response);
+        $out['data']['upDate'] =  Arrays::get('epp.response.resData.domain:infData.domain:upDate', $response);
+        $out['data']['exDate'] =  Arrays::get('epp.response.resData.domain:infData.domain:exDate', $response);
+        foreach ($response['epp.response.resData.domain:infData.domain:status'] as $status) {
+            $out['data']['status'][] = $status['@attributes.s'];
+        }
+        foreach ($response['epp.response.resData.domain:infData.domain:contact'] as $contact) {
+            $out['data']['contact'][$contact['@attributes.type']] = $contact['@value'];
+        }
+        foreach ($response['epp.response.resData.domain:infData.domain:ns.domain:hostAttr'] as $key =>  $ns) {
+            $out['data']['ns'][$key]['hostName'] = $ns['domain:hostName'];
+            $out['data']['ns'][$key]['hostAddr'] = Arrays::get('domain:hostAddr.@value', $ns);
+            $out['data']['ns'][$key]['ip'] = Arrays::get('domain:hostAddr.@attributes.ip', $ns);
+        }
+        return $out;
+    }
 }
