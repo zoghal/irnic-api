@@ -515,9 +515,33 @@ class IrNic
         ];
 
         return $out;
-       
     }
 
 
-    
+    public function domainRenew(string $domain, int $period, $curExpDate)
+    {
+        $_periods = [12, 60];
+
+        if (!in_array($period, $_periods)) {
+            throw new \Exception('Domain period is must be 12 or 60');
+        }
+
+        $data = [
+            'domain' => $domain,
+            'period' => $period,
+            'curExpDate' => $curExpDate,
+        ];
+        $response = $this->callApi('domain/renew', $data, true);
+
+        $out['meta'] = [
+            'code' => $response['epp.response.result.@attributes.code'],
+            'massage' => $response['epp.response.result.msg'],
+            'clTRID' => $response['epp.response.trID.clTRID'],
+            'svTRID' => $response['epp.response.trID.svTRID'],
+        ];
+        $out['data'] = [
+            'domain' => $response['epp.response.resData.domain:renData.domain:name'],
+        ];
+        return $out;
+    }
 }

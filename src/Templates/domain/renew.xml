@@ -1,0 +1,13 @@
+{% extends layouts/main.xml %}
+{% block content %}
+	<renew>
+		<domain:renew xmlns:domain="http://epp.nic.ir/ns/domain-1.0">
+			<domain:name>{{ $domain }}</domain:name>
+			<domain:curExpDate>{{ $curExpDate }}</domain:curExpDate>
+			<domain:period unit="m">{{ $period }}</domain:period>
+			<domain:authInfo>
+				<domain:pw>{{ $disposit }}</domain:pw>
+			</domain:authInfo>
+		</domain:renew>
+	</renew>
+{% endblock %}
