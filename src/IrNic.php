@@ -142,28 +142,6 @@ class IrNic
 
 
     /**
-     * Retrieves the value at the specified path in the given nested array.
-     *
-     * @param array &$data The nested array to search in.
-     * @param string $path The path to the desired value, using dot notation.
-     * @param mixed $def The default value to return if the path is not found. Default is null.
-     * @return mixed The value at the specified path, or the default value if the path is not found.
-     */
-    protected function getValue(array &$data, $path, $def = null)
-    {
-        $keys = explode('.', $path);
-        foreach ($keys as $k) {
-            if (isset($data[$k])) {
-                $data = &$data[$k];
-            } else {
-                return $def;
-            }
-        }
-        return $data;
-    }
-
-
-    /**
      * Retrieves the error message corresponding to the given error code.
      *
      * @param int $errCode The error code to retrieve the error message for.
@@ -175,6 +153,12 @@ class IrNic
     }
 
 
+    /**
+     * Determines the type of IP address provided.
+     *
+     * @param string $ip The IP address to check.
+     * @return string|bool Returns 'v4' if the IP address is a IPv4 address, 'v6' if it is a IPv6 address, or false if it is not a valid IP address.
+     */
     protected function getTypeIP($ip)
     {
         if (!filter_var($ip, FILTER_VALIDATE_IP)) {
@@ -372,30 +356,12 @@ class IrNic
     }
 
 
-
     /**
      * Checks the availability of the given domains and returns the result.
      *
      * @param array $domains An array of domain names to be checked.
      * @return array An array containing the meta information and the availability status of each domain.
      * The array structure is as follows:
-     * [
-     *     'meta' => [
-     *         'code' => The response code,
-     *         'massage' => The response message,
-     *         'clTRID' => The client transaction ID,
-     *         'svTRID' => The server transaction ID,
-     *     ],
-     *     'data' => [
-     *         'domain_name' => [
-     *             'normalized_name' => The normalized domain name,
-     *             'canonized_name' => The canonized domain name,
-     *             'tld' => The top-level domain (TLD),
-     *             'available' => A boolean indicating whether the domain is available or not,
-     *         ],
-     *         ...
-     *     ],
-     * ]
      */
     public function domainCheck(array $domains)
     {
@@ -576,6 +542,14 @@ class IrNic
         return $out;
     }
 
+    /**
+     * Updates the contact details for a domain.
+     *
+     * @param string $domain The domain to update the contacts for.
+     * @param array $contacts An array containing contact details for the domain.
+     * @throws \Exception If the handler only supports specific contact types or if a contact detail is empty.
+     * @return array|null The response meta information and data after updating the contacts.
+     */
     public function domainUpdateContact(string $domain, array $contacts)
     {
         $_contacts = ['holder', 'admin', 'tech', 'bill', 'reseller'];
@@ -605,13 +579,13 @@ class IrNic
         return $out;
     }
 
+
     /**
      * Updates the nameservers for a given domain.
      *
      * @param string $domain The domain name to update.
      * @param array $ns An array of nameservers for the domain. Each nameserver can be either a string or an associative array with the keys 'hostName' and 'hostAddr'.
-     * @throws \Exception If the number of nameservers is not between 2 and 4.
-     * @throws \Exception If the domain is not found.
+     * @throws \Exception If the number of nameservers is not between 2 and 4, or if the domain is not found.
      * @return array An array with the following keys: 'meta' (an array with the response metadata), 'data' (null).
      */
     public function domainUpdateNS(string $domain, array $ns)
@@ -658,5 +632,6 @@ class IrNic
 
     public function domainTransfer()
     {
+        //TODO: تکمیل نشده! پیچیدگی دارد.
     }
 }
