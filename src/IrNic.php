@@ -501,6 +501,23 @@ class IrNic
 
 
         $response = $this->callApi('domain/create', $data, true);
-        print_r($response);
+
+        $out['meta'] = [
+            'code' => $response['epp.response.result.@attributes.code'],
+            'massage' => $response['epp.response.result.msg'],
+            'clTRID' => $response['epp.response.trID.clTRID'],
+            'svTRID' => $response['epp.response.trID.svTRID'],
+        ];
+        $out['data'] = [
+            'domain' => $response['epp.response.resData.domain:creData.domain:name'],
+            'crDate' => $response['epp.response.resData.domain:creData.domain:crDate'],
+            'exDate' => $response['epp.response.resData.domain:creData.domain:exDate'],
+        ];
+
+        return $out;
+       
     }
+
+
+    
 }
