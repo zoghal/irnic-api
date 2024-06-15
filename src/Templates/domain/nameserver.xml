@@ -1,0 +1,35 @@
+{% extends layouts/main.xml %}
+{% block content %}
+	<update>
+		<domain:update xmlns:domain="http://epp.nic.ir/ns/domain-1.0">
+			<domain:name>{{ $domain }}</domain:name>
+			<domain:add>
+				<domain:ns>
+					{% foreach($new as $nameserver): %}
+					<domain:hostAttr>
+						<domain:hostName>{{ $nameserver['hostName'] }}</domain:hostName>
+						{% if(!empty($nameserver['hostAddr'])): %}
+							<domain:hostAddr ip="{{ $nameserver['type'] }}">{{ $nameserver['hostAddr'] }}</domain:hostAddr>
+						{% endif %}
+					</domain:hostAttr>
+					{% endforeach %}
+				</domain:ns>
+			</domain:add>
+			<domain:rem>
+				<domain:ns>
+					{% foreach($old as $nameserver): %}
+					<domain:hostAttr>
+						<domain:hostName>{{ $nameserver['hostName'] }}</domain:hostName>
+						{% if(!empty($nameserver['hostAddr'])): %}
+							<domain:hostAddr ip="{{ $nameserver['type'] }}">{{ $nameserver['hostAddr'] }}</domain:hostAddr>
+						{% endif %}
+					</domain:hostAttr>
+					{% endforeach %}
+				</domain:ns>
+			</domain:rem>
+			<domain:authInfo>
+				<domain:pw>{{ $disposit }}</domain:pw>
+			</domain:authInfo>
+		</domain:update>
+	</update>
+{% endblock %}

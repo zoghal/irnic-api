@@ -1,0 +1,16 @@
+{% extends layouts/main.xml %}
+{% block content %}
+	<update>
+		<domain:update xmlns:domain="http://epp.nic.ir/ns/domain-1.0">
+			<domain:name>{{ $domain }}</domain:name>
+			<domain:chg>
+				{% foreach($contacts as $key => $name): %}
+				<domain:contact type="{{ $key }}">{{ $name }}</domain:contact>
+				{% endforeach %}
+			</domain:chg>
+			<domain:authInfo>
+				<domain:pw>{{ $disposit }}</domain:pw>
+			</domain:authInfo>
+		</domain:update>
+	</update>
+{% endblock %}
