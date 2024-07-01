@@ -105,6 +105,7 @@ class IrNic
     public static $irnicApiUrl = 'https://epp.nic.ir/submit';
     public static $templateCache = false;
     public static $debug = false;
+
     /**
      * Constructs a new instance of the class.
      *
@@ -119,11 +120,12 @@ class IrNic
         if (false === strpos($reseller_nic_handle, '-irnic')) {
             throw new \Exception('resseler_nic_handle must end with -irnic');
         }
-        $reseller_nic_handle = str_replace('-irnic', '', $reseller_nic_handle);
+
         $this->config = [
             'token' => $irnic_token,
             'password' => $irnic_password,
-            'handle' => $reseller_nic_handle
+            'handle' => str_replace('-irnic', '', $reseller_nic_handle),
+            'reseller' => $reseller_nic_handle
         ];
     }
 
@@ -180,10 +182,10 @@ class IrNic
      * @param bool $reternXml Whether to return the XML directly. Default is false.
      * @return array The response from the IRNIC API as an array.
      */
-    private function callApi(string $action, array $data, $reternXml = false)
+    private function callApi(string $action, array $data, $returnXML = false)
     {
         $xml = $this->renderTemplate($action . '.xml', $data);
-        if ($reternXml) {
+        if ($returnXML) {
             return $xml;
         }
         $client = new Client();
@@ -227,6 +229,45 @@ class IrNic
     }
 
     /**
+     * Checks the permissibility of contacts based on certain criteria.
+     *
+     * @param array $contacts The array of contacts to be checked.
+     * @throws \Exception If an error occurs during the contact check process.
+     * @return array An array containing the errors for contacts that do not meet the criteria.
+     */
+    private function _checkPermissibleContacts(array $contacts)
+    {
+        $positions = [];
+        $nichandles = array_unique($contacts);
+        $err = [];
+        foreach ($nichandles as $key => $value) {
+            if (trim($value) === $this->config['reseller']) {
+                continue;
+            }
+            $info = $this->contentInfo($value);
+            if ($info['meta']['code'] != 1000) {
+                $positions[$value] = false;
+            } else {
+                $positions[$value] = $info['data']['position'];
+            }
+        }
+
+        foreach ($contacts as $key => $value) {
+            if (trim($value) === $this->config['reseller']) {
+                continue;
+            }
+            if (!is_array($positions[$value])) {
+                $err[$value] = 'This contact is not correct';
+                continue;
+            }
+            if ($positions[$value][$key] != true) {
+                $err[$value] = 'You are not allowed to set the `' . $key . '` for this contact';
+            }
+        }
+        return $err;
+    }
+
+    /**
      * Renders a template with the given name and data.
      *
      * @param string $templateName The name of the template to render.
@@ -243,6 +284,28 @@ class IrNic
     }
 
     /**
+     * Retrieves the response metadata from the given response.
+     *
+     * @param array $response The response from which to extract the metadata.
+     * @return array The response metadata, containing the code, message, errors,
+     *               client transaction ID, and server transaction ID.
+     */
+    private function getResponseMeta($response)
+    {
+        $meta = [];
+        $meta['code'] = $response['epp.response.result.@attributes.code'];
+        $meta['massage'] = $response['epp.response.result.msg'];
+        $meta['errors'] = Arrays::get('epp.response.result.value', $response);
+        if ($meta['errors'] === null) {
+            $meta['errors'] = Arrays::get('epp.response.result.extValue.*', $response);
+        }
+        $meta['clTRID'] = $response['epp.response.trID.clTRID'];
+        $meta['svTRID'] = $response['epp.response.trID.svTRID'];
+
+        return $meta;
+    }
+
+    /**
      * Checks the content of the given contacts and returns the result.
      *
      * @param array $contacts The nic-handels to be checked.
@@ -255,13 +318,7 @@ class IrNic
             throw new \Exception('No contacts provided');
         }
         $response = $this->callApi('contact/check', ['contacts' => $contacts]);
-
-        $out['meta'] = [
-            'code' => $response['epp.response.result.@attributes.code'],
-            'massage' => $response['epp.response.result.msg'],
-            'clTRID' => $response['epp.response.trID.clTRID'],
-            'svTRID' => $response['epp.response.trID.svTRID'],
-        ];
+        $out['meta'] = $this->getResponseMeta($response);
 
         if (!Arrays::has_key('epp.response.resData', $response)) {
             $out['data'] = [];
@@ -287,19 +344,20 @@ class IrNic
 
 
 
+    /**
+     * Retrieves information about a contact based on the provided NIC handle.
+     *
+     * @param string|null $nic_handle The NIC handle of the contact to retrieve information for.
+     * @throws \Exception If the NIC handle or email is not provided.
+     * @return array The information about the contact including meta data, contact details, and extension details.
+     */
     public function contentInfo(string $nic_handle = null)
     {
         if (null === $nic_handle) {
             throw new \Exception('irnic-handle or emailis not provided');
         }
         $response = $this->callApi('contact/info', ['irnic_handle' => $nic_handle]);
-
-        $out['meta'] = [
-            'code' => $response['epp.response.result.@attributes.code'],
-            'massage' => $response['epp.response.result.msg'],
-            'clTRID' => $response['epp.response.trID.clTRID'],
-            'svTRID' => $response['epp.response.trID.svTRID'],
-        ];
+        $out['meta'] = $this->getResponseMeta($response);
 
         if (!Arrays::has_key('epp.response.resData', $response)) {
             $out['data'] = [];
@@ -366,13 +424,7 @@ class IrNic
     public function domainCheck(array $domains)
     {
         $response = $this->callApi('domain/check', ['domains' => $domains]);
-
-        $out['meta'] = [
-            'code' => $response['epp.response.result.@attributes.code'],
-            'massage' => $response['epp.response.result.msg'],
-            'clTRID' => $response['epp.response.trID.clTRID'],
-            'svTRID' => $response['epp.response.trID.svTRID'],
-        ];
+        $out['meta'] = $this->getResponseMeta($response);
 
         if (!Arrays::has_key('epp.response.resData', $response)) {
             $out['data'] = [];
@@ -404,12 +456,7 @@ class IrNic
     public function domainInfo(string $domain)
     {
         $response = $this->callApi('domain/info', ['domain' => $domain]);
-        $out['meta'] = [
-            'code' => $response['epp.response.result.@attributes.code'],
-            'massage' => $response['epp.response.result.msg'],
-            'clTRID' => $response['epp.response.trID.clTRID'],
-            'svTRID' => $response['epp.response.trID.svTRID'],
-        ];
+        $out['meta'] = $this->getResponseMeta($response);
 
         if (!Arrays::has_key('epp.response.resData', $response)) {
             $out['data'] = [];
@@ -428,10 +475,17 @@ class IrNic
         foreach ($response['epp.response.resData.domain:infData.domain:contact'] as $contact) {
             $out['data']['contact'][$contact['@attributes.type']] = $contact['@value'];
         }
-        foreach ($response['epp.response.resData.domain:infData.domain:ns.domain:hostAttr'] as $key =>  $ns) {
-            $out['data']['ns'][$key]['hostName'] = $ns['domain:hostName'];
-            $out['data']['ns'][$key]['hostAddr'] = Arrays::get('domain:hostAddr.@value', $ns);
-            $out['data']['ns'][$key]['ip'] = Arrays::get('domain:hostAddr.@attributes.ip', $ns);
+
+        if (is_array($response['epp.response.resData.domain:infData.domain:ns.domain:hostAttr'])) {
+            foreach ($response['epp.response.resData.domain:infData.domain:ns.domain:hostAttr'] as $key =>  $ns) {
+                $out['data']['ns'][$key]['hostName'] = $ns['domain:hostName'];
+                $out['data']['ns'][$key]['hostAddr'] = Arrays::get('domain:hostAddr.@value', $ns);
+                $out['data']['ns'][$key]['ip'] = Arrays::get('domain:hostAddr.@attributes.ip', $ns);
+            }
+        } else {
+            $out['data']['ns'][0]['hostName'] = $response['epp.response.resData.domain:infData.domain:ns.domain:hostAttr.domain:hostName'];
+            $out['data']['ns'][0]['hostAddr'] = null;
+            $out['data']['ns'][0]['ip'] = null;
         }
         return $out;
     }
@@ -465,6 +519,11 @@ class IrNic
             }
         }
 
+        $checkHandles = $this->_checkPermissibleContacts($contacts);
+        if (!empty($checkHandles)) {
+            throw new \Exception(var_export($checkHandles, true));
+        }
+
         $_ns = count($ns);
         if ($_ns < 2 || $_ns > 4) {
             throw new \Exception('$ns must be between 2 and 4 nameservers');
@@ -475,6 +534,7 @@ class IrNic
             'period' => $period,
             'contacts' => $contacts,
         ];
+
         foreach ($ns as $key => $val) {
             if (is_numeric($key)) {
                 $key = $val;
@@ -487,15 +547,14 @@ class IrNic
             ];
         }
 
+        $response = $this->callApi('domain/create', $data);
+        $out['meta'] = $this->getResponseMeta($response);
 
-        $response = $this->callApi('domain/create', $data, true);
+        if ($out['meta']['code'] != 1000) {
+            $out['data'] = [];
+            return $out;
+        }
 
-        $out['meta'] = [
-            'code' => $response['epp.response.result.@attributes.code'],
-            'massage' => $response['epp.response.result.msg'],
-            'clTRID' => $response['epp.response.trID.clTRID'],
-            'svTRID' => $response['epp.response.trID.svTRID'],
-        ];
         $out['data'] = [
             'domain' => $response['epp.response.resData.domain:creData.domain:name'],
             'crDate' => $response['epp.response.resData.domain:creData.domain:crDate'],
@@ -515,30 +574,36 @@ class IrNic
      * @throws \Exception Domain period must be 12 or 60.
      * @return array Information about the renewal including meta and data.
      */
-    public function domainRenew(string $domain, int $period, $curExpDate)
+    public function domainRenew(string $domain, int $period, $curExpDate = null)
     {
         $_periods = [12, 60];
 
         if (!in_array($period, $_periods)) {
             throw new \Exception('Domain period is must be 12 or 60');
         }
-
+        if ($curExpDate === null) {
+            $domainExpDate = $this->domainInfo($domain);
+            if ((int)$domainExpDate['meta']['code'] !== 1000) {
+                return $domainExpDate;
+            }
+            $domainExpDate = explode('T', $domainExpDate['data']['exDate']);
+            $curExpDate = $domainExpDate[0];
+        }
         $data = [
             'domain' => $domain,
             'period' => $period,
             'curExpDate' => $curExpDate,
         ];
-        $response = $this->callApi('domain/renew', $data, true);
 
-        $out['meta'] = [
-            'code' => $response['epp.response.result.@attributes.code'],
-            'massage' => $response['epp.response.result.msg'],
-            'clTRID' => $response['epp.response.trID.clTRID'],
-            'svTRID' => $response['epp.response.trID.svTRID'],
-        ];
-        $out['data'] = [
-            'domain' => $response['epp.response.resData.domain:renData.domain:name'],
-        ];
+        $response = $this->callApi('domain/renew', $data, false);
+        $out['meta'] = $this->getResponseMeta($response);
+
+        if ($out['meta']['code'] != 1001) {
+            $out['data'] = [];
+            return $out;
+        }
+        $out['data']['domain'] = $response['epp.response.resData.domain:renData.domain:name'];
+
         return $out;
     }
 
@@ -567,13 +632,7 @@ class IrNic
         ];
 
         $response = $this->callApi('domain/updatecontact', $data, false);
-
-        $out['meta'] = [
-            'code' => $response['epp.response.result.@attributes.code'],
-            'massage' => $response['epp.response.result.msg'],
-            'clTRID' => $response['epp.response.trID.clTRID'],
-            'svTRID' => $response['epp.response.trID.svTRID'],
-        ];
+        $out['meta'] = $this->getResponseMeta($response);
         $out['data'] = null;
 
         return $out;
@@ -611,6 +670,7 @@ class IrNic
         if ($domainInfo['meta']['code'] != 1000) {
             throw new \Exception('Domain not found');
         }
+
         $domainInfo = $domainInfo['data']['ns'];
         $data = [
             'domain' => $domain,
@@ -618,13 +678,7 @@ class IrNic
             'new' => $newNS
         ];
         $response = $this->callApi('domain/nameserver', $data, false);
-
-        $out['meta'] = [
-            'code' => $response['epp.response.result.@attributes.code'],
-            'massage' => $response['epp.response.result.msg'],
-            'clTRID' => $response['epp.response.trID.clTRID'],
-            'svTRID' => $response['epp.response.trID.svTRID'],
-        ];
+        $out['meta'] = $this->getResponseMeta($response);
         $out['data'] = null;
 
         return $out;
