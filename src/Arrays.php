@@ -56,19 +56,68 @@ class Arrays
         return false;
     }
 
+
     /**
      * Retrieves the value associated with the given key from the array.
      *
+     * If the key ends with '.*', it will return an associative array containing all the values
+     * whose keys start with the given key. If the key does not exist in the array, the default
+     * value will be returned.
+     *
      * @param string $key The key to search for in the array.
      * @param array $array The array to search in.
-     * @param mixed $default The default value to return if the key is not found. Default is false.
-     * @return mixed The value associated with the key, or the default value if the key is not found.
+     * @param mixed $default The default value to return if the key does not exist in the array. Default is null.
+     * @return mixed The value associated with the key, or the default value if the key does not exist.
      */
     public static function get(string $key, array $array, $default = null)
     {
-        if (array_key_exists($key, $array)) {
-            return $array[$key];
+        if (!self::str_ends_with($key, '.*')) {
+            if (array_key_exists($key, $array)) {
+                return $array[$key];
+            }
+            return $default;
         }
-        return $default;
+
+        $out = [];
+        $key = rtrim($key, '*');
+
+        foreach ($array as $k => $v) {
+            if (!self::str_starts_with($k, $key)) {
+                continue;
+            }
+            $k = str_replace($key, '', $k);
+            $out[$k] = $v;
+        }
+        if (empty($out)) {
+            return $default;
+        }
+        return $out;
+    }
+
+
+    /**
+     * Checks if a string ends with a given substring.
+     *
+     * @param string $haystack The string to search in.
+     * @param string $needle The substring to search for.
+     * @return bool Returns true if the string ends with the substring, false otherwise.
+     */
+    private static function str_ends_with(string $haystack, string $needle): bool
+    {
+        return $needle !== '' && substr($haystack, -strlen($needle)) === (string)$needle;
+    }
+
+
+    /**
+     * Checks if a string starts with a given substring.
+     *
+     * @param string $haystack The string to search in.
+     * @param string $needle The substring to search for.
+     * @return bool Returns true if the string starts with the substring, false otherwise.
+     */
+    private static function str_starts_with($haystack, $needle)
+    {
+
+        return (string)$needle !== '' && strncmp($haystack, $needle, strlen($needle)) === 0;
     }
 }
