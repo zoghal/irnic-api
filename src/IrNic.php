@@ -295,9 +295,9 @@ class IrNic
         $meta = [];
         $meta['code'] = $response['epp.response.result.@attributes.code'];
         $meta['massage'] = $response['epp.response.result.msg'];
-        $meta['errors'] = Arrays::get('epp.response.result.value', $response);
-        if ($meta['errors'] === null) {
-            $meta['errors'] = Arrays::get('epp.response.result.extValue.*', $response);
+        $meta['extError'] = Arrays::get('epp.response.result.value', $response);
+        if ($meta['extError'] === null) {
+            $meta['extError'] = Arrays::get('epp.response.result.extValue.*', $response);
         }
         $meta['clTRID'] = $response['epp.response.trID.clTRID'];
         $meta['svTRID'] = $response['epp.response.trID.svTRID'];
